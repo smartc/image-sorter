@@ -157,6 +157,18 @@
             color: #000;
         }
 
+        .btn-previous {
+            background: #6b7280;
+            color: #fff;
+        }
+
+        .btn-previous:disabled {
+            background: #4b5563;
+            color: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
         .no-images {
             text-align: center;
             padding: 40px;
@@ -222,8 +234,11 @@
         let currentImage = null;
         let currentFolder = 'Unsorted';
         let reviewedImages = {}; // Track reviewed images per folder
+        let imageHistory = []; // Track navigation history
+        let historyIndex = -1; // Current position in history
+        let lastCounts = { unsorted: 0, clear: 0, cloudy: 0, skip: 0 }; // Track counts for auto-refresh
 
-        async function loadCurrentImage() {
+        async function loadCurrentImage(fromHistory = false) {
             try {
                 const folderSelect = document.getElementById('folder-select');
                 currentFolder = folderSelect.value;
@@ -235,11 +250,8 @@
                 const response = await fetch(`/api/current?folder=${currentFolder}${excludeParam}`);
                 const data = await response.json();
 
-                // Update stats
-                document.getElementById('unsorted-count').textContent = data.unsorted_count;
-                document.getElementById('clear-count').textContent = data.clear_count;
-                document.getElementById('cloudy-count').textContent = data.cloudy_count;
-                document.getElementById('skip-count').textContent = data.skip_count;
+                // Update stats and check for new files
+                updateStats(data);
 
                 const mainContent = document.getElementById('main-content');
 
@@ -254,6 +266,16 @@
                 }
 
                 currentImage = data.filename;
+
+                // Add to history if not navigating from history
+                if (!fromHistory) {
+                    // Remove any forward history if we're in the middle
+                    if (historyIndex < imageHistory.length - 1) {
+                        imageHistory = imageHistory.slice(0, historyIndex + 1);
+                    }
+                    imageHistory.push({ filename: currentImage, folder: currentFolder });
+                    historyIndex = imageHistory.length - 1;
+                }
 
                 // Build button HTML based on current folder
                 let buttonsHTML = '';
@@ -290,16 +312,22 @@
                     `;
                 }
 
+                const canGoPrevious = historyIndex > 0;
+
                 mainContent.innerHTML = `
                     <div class="image-container">
                         <img src="/image/${data.filename}?folder=${currentFolder}" alt="${data.filename}">
                     </div>
                     <div class="filename">${data.filename}</div>
                     <div class="controls">
+                        <button class="btn-previous" onclick="previousImage()" ${!canGoPrevious ? 'disabled' : ''}>
+                            <span>Previous</span>
+                            <span class="key">←</span>
+                        </button>
                         ${buttonsHTML}
                         <button class="btn-next" onclick="skipImage()">
                             <span>Next</span>
-                            <span class="key">N</span>
+                            <span class="key">→</span>
                         </button>
                     </div>
                 `;
@@ -309,6 +337,32 @@
                         <strong>Error:</strong> ${error.message}
                     </div>
                 `;
+            }
+        }
+
+        function updateStats(data) {
+            document.getElementById('unsorted-count').textContent = data.unsorted_count;
+            document.getElementById('clear-count').textContent = data.clear_count;
+            document.getElementById('cloudy-count').textContent = data.cloudy_count;
+            document.getElementById('skip-count').textContent = data.skip_count;
+
+            // Check if counts have changed (new files added)
+            const hasNewFiles =
+                data.unsorted_count > lastCounts.unsorted ||
+                data.clear_count > lastCounts.clear ||
+                data.cloudy_count > lastCounts.cloudy ||
+                data.skip_count > lastCounts.skip;
+
+            lastCounts = {
+                unsorted: data.unsorted_count,
+                clear: data.clear_count,
+                cloudy: data.cloudy_count,
+                skip: data.skip_count
+            };
+
+            // If new files were added and we're viewing an empty folder, reload
+            if (hasNewFiles && !currentImage) {
+                setTimeout(() => loadCurrentImage(), 1000);
             }
         }
 
@@ -355,12 +409,113 @@
             loadCurrentImage();
         }
 
+        function previousImage() {
+            if (historyIndex <= 0) return;
+
+            historyIndex--;
+            const previousEntry = imageHistory[historyIndex];
+
+            // Switch folder if needed
+            if (previousEntry.folder !== currentFolder) {
+                document.getElementById('folder-select').value = previousEntry.folder;
+                currentFolder = previousEntry.folder;
+            }
+
+            // Remove from reviewed list if it was there
+            if (reviewedImages[currentFolder]) {
+                reviewedImages[currentFolder] = reviewedImages[currentFolder].filter(
+                    img => img !== previousEntry.filename
+                );
+            }
+
+            // Load the previous image directly
+            currentImage = previousEntry.filename;
+            displayCurrentImage();
+        }
+
+        async function displayCurrentImage() {
+            try {
+                const response = await fetch(`/api/current?folder=${currentFolder}`);
+                const data = await response.json();
+                updateStats(data);
+
+                const mainContent = document.getElementById('main-content');
+
+                // Build button HTML based on current folder
+                let buttonsHTML = '';
+                if (currentFolder !== 'Unsorted') {
+                    buttonsHTML += `
+                        <button class="btn-unsorted" onclick="moveToFolder('Unsorted')">
+                            <span>Unsorted</span>
+                            <span class="key">U</span>
+                        </button>
+                    `;
+                }
+                if (currentFolder !== 'Clear') {
+                    buttonsHTML += `
+                        <button class="btn-clear" onclick="moveToFolder('Clear')">
+                            <span>Clear</span>
+                            <span class="key">C</span>
+                        </button>
+                    `;
+                }
+                if (currentFolder !== 'Cloudy') {
+                    buttonsHTML += `
+                        <button class="btn-cloudy" onclick="moveToFolder('Cloudy')">
+                            <span>Cloudy</span>
+                            <span class="key">L</span>
+                        </button>
+                    `;
+                }
+                if (currentFolder !== 'Skip') {
+                    buttonsHTML += `
+                        <button class="btn-skip" onclick="moveToFolder('Skip')">
+                            <span>Skip</span>
+                            <span class="key">S</span>
+                        </button>
+                    `;
+                }
+
+                const canGoPrevious = historyIndex > 0;
+
+                mainContent.innerHTML = `
+                    <div class="image-container">
+                        <img src="/image/${currentImage}?folder=${currentFolder}" alt="${currentImage}">
+                    </div>
+                    <div class="filename">${currentImage}</div>
+                    <div class="controls">
+                        <button class="btn-previous" onclick="previousImage()" ${!canGoPrevious ? 'disabled' : ''}>
+                            <span>Previous</span>
+                            <span class="key">←</span>
+                        </button>
+                        ${buttonsHTML}
+                        <button class="btn-next" onclick="skipImage()">
+                            <span>Next</span>
+                            <span class="key">→</span>
+                        </button>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error displaying image:', error);
+            }
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (!currentImage) return;
 
             const key = e.key.toLowerCase();
-            if (key === 'c' && currentFolder !== 'Clear') {
+
+            // Arrow keys for navigation
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                previousImage();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                skipImage();
+            }
+            // Category shortcuts
+            else if (key === 'c' && currentFolder !== 'Clear') {
                 moveToFolder('Clear');
             } else if (key === 'l' && currentFolder !== 'Cloudy') {
                 moveToFolder('Cloudy');
@@ -368,8 +523,6 @@
                 moveToFolder('Skip');
             } else if (key === 'u' && currentFolder !== 'Unsorted') {
                 moveToFolder('Unsorted');
-            } else if (key === 'n') {
-                skipImage();
             }
         });
 
@@ -379,6 +532,17 @@
             reviewedImages[currentFolder] = [];
             loadCurrentImage();
         });
+
+        // Auto-refresh: Poll for new files every 5 seconds
+        setInterval(async () => {
+            try {
+                const response = await fetch(`/api/current?folder=${currentFolder}`);
+                const data = await response.json();
+                updateStats(data);
+            } catch (error) {
+                console.error('Auto-refresh error:', error);
+            }
+        }, 5000);
 
         // Load first image on page load
         loadCurrentImage();

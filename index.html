@@ -152,6 +152,11 @@
             color: #000;
         }
 
+        .btn-next {
+            background: #9ca3af;
+            color: #000;
+        }
+
         .no-images {
             text-align: center;
             padding: 40px;
@@ -216,13 +221,18 @@
     <script>
         let currentImage = null;
         let currentFolder = 'Unsorted';
+        let reviewedImages = {}; // Track reviewed images per folder
 
         async function loadCurrentImage() {
             try {
                 const folderSelect = document.getElementById('folder-select');
                 currentFolder = folderSelect.value;
 
-                const response = await fetch(`/api/current?folder=${currentFolder}`);
+                // Get list of reviewed images for current folder
+                const excludeList = reviewedImages[currentFolder] || [];
+                const excludeParam = excludeList.length > 0 ? `&exclude=${excludeList.join(',').replace(/,/g, '%2C')}` : '';
+
+                const response = await fetch(`/api/current?folder=${currentFolder}${excludeParam}`);
                 const data = await response.json();
 
                 // Update stats
@@ -287,6 +297,10 @@
                     <div class="filename">${data.filename}</div>
                     <div class="controls">
                         ${buttonsHTML}
+                        <button class="btn-next" onclick="skipImage()">
+                            <span>Next</span>
+                            <span class="key">N</span>
+                        </button>
                     </div>
                 `;
             } catch (error) {
@@ -315,6 +329,10 @@
                 });
 
                 if (response.ok) {
+                    // Clear reviewed list for current folder since we moved an image
+                    if (reviewedImages[currentFolder]) {
+                        reviewedImages[currentFolder] = reviewedImages[currentFolder].filter(img => img !== currentImage);
+                    }
                     loadCurrentImage();
                 } else {
                     alert('Error moving image');
@@ -322,6 +340,19 @@
             } catch (error) {
                 alert('Error: ' + error.message);
             }
+        }
+
+        function skipImage() {
+            if (!currentImage) return;
+
+            // Add current image to reviewed list
+            if (!reviewedImages[currentFolder]) {
+                reviewedImages[currentFolder] = [];
+            }
+            reviewedImages[currentFolder].push(currentImage);
+
+            // Load next image
+            loadCurrentImage();
         }
 
         // Keyboard shortcuts
@@ -337,11 +368,15 @@
                 moveToFolder('Skip');
             } else if (key === 'u' && currentFolder !== 'Unsorted') {
                 moveToFolder('Unsorted');
+            } else if (key === 'n') {
+                skipImage();
             }
         });
 
         // Handle folder selection change
         document.getElementById('folder-select').addEventListener('change', () => {
+            // Clear reviewed images when switching folders
+            reviewedImages[currentFolder] = [];
             loadCurrentImage();
         });
 

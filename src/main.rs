@@ -35,6 +35,7 @@ struct MoveImageRequest {
 #[derive(Deserialize)]
 struct FolderQuery {
     folder: Option<String>,
+    exclude: Option<String>,
 }
 
 #[tokio::main]
@@ -72,6 +73,11 @@ async fn get_current_image(
 ) -> Result<Json<ImageInfo>, StatusCode> {
     let current_folder = query.folder.unwrap_or_else(|| "Unsorted".to_string());
 
+    // Parse excluded filenames
+    let excluded: Vec<String> = query.exclude
+        .map(|e| e.split(',').map(|s| s.to_string()).collect())
+        .unwrap_or_default();
+
     let unsorted_path = format!("{}/Unsorted", state.base_path);
     let clear_path = format!("{}/Clear", state.base_path);
     let cloudy_path = format!("{}/Cloudy", state.base_path);
@@ -83,7 +89,7 @@ async fn get_current_image(
     let cloudy_count = count_images(&cloudy_path).await;
     let skip_count = count_images(&skip_path).await;
 
-    // Get first image from the current folder
+    // Get first image from the current folder that's not excluded
     let current_path = format!("{}/{}", state.base_path, current_folder);
     let mut entries = match fs::read_dir(&current_path).await {
         Ok(entries) => entries,
@@ -95,7 +101,7 @@ async fn get_current_image(
         if let Ok(file_type) = entry.file_type().await {
             if file_type.is_file() {
                 if let Some(name) = entry.file_name().to_str() {
-                    if is_image_file(name) {
+                    if is_image_file(name) && !excluded.contains(&name.to_string()) {
                         filename = name.to_string();
                         break;
                     }

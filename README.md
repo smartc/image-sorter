@@ -45,12 +45,14 @@ A web-based utility for sorting sky images to build machine learning datasets. D
 - Click the **Cloudy** button to move the current image to `samples/Cloudy/`
 - Click the **Skip** button to move the current image to `samples/Skip/`
 - Click the **Unsorted** button (when reviewing sorted images) to move back to `samples/Unsorted/`
+- Click the **Next** button to leave the image where it is and move to the next one
 
 ### Keyboard Shortcuts
 - Press **C** to categorize as Clear
 - Press **L** to categorize as Cloudy (L for cLoudy)
 - Press **S** to categorize as Skip
 - Press **U** to move back to Unsorted (when reviewing sorted images)
+- Press **N** to skip to Next image without moving the current one
 
 ### Counters
 The header shows real-time counts of:

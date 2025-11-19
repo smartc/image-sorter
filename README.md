@@ -1,14 +1,18 @@
-# Image Sorter
+# Sky Image Sorter
 
-A simple web-based tool to sort images for machine learning datasets.
+A web-based utility for sorting sky images to build machine learning datasets. Designed for classifying all-sky camera images into clear, cloudy, and skip categories, making it easy to prepare training data for weather and cloud detection models.
 
 ## Features
 
-- View images one at a time from the `samples/Unsorted` folder
-- Categorize images into Clear, Cloudy, or Skip
+- View and sort images one at a time from the `samples/Unsorted` folder
+- Categorize images into Clear Sky, Cloudy, or Skip
+- **Review mode**: Review and recategorize images from any folder (Unsorted, Clear, Cloudy, or Skip)
+- **Navigation**: Previous/Next buttons to navigate through images (uses arrow keys)
+- **Auto-refresh**: Automatically detects when new images are added to folders
 - Real-time counters for all categories
 - Keyboard shortcuts for quick sorting
 - Automatically loads the next image after categorization
+- Move images between folders to fix mistakes or refine classifications
 
 ## Setup
 
@@ -32,15 +36,31 @@ A simple web-based tool to sort images for machine learning datasets.
 
 ## Usage
 
+### Folder Selection
+- Use the folder selector dropdown to choose which folder to review
+- **Unsorted** (default): Sort new images into categories
+- **Clear**, **Cloudy**, **Skip**: Review and recategorize previously sorted images
+- Switch between folders anytime to fix mistakes or refine your classifications
+
 ### Mouse Controls
 - Click the **Clear** button to move the current image to `samples/Clear/`
 - Click the **Cloudy** button to move the current image to `samples/Cloudy/`
 - Click the **Skip** button to move the current image to `samples/Skip/`
+- Click the **Unsorted** button (when reviewing sorted images) to move back to `samples/Unsorted/`
+- Click the **Previous** button to go back to the previous image
+- Click the **Next** button to leave the image where it is and move to the next one
 
 ### Keyboard Shortcuts
+
+**Navigation:**
+- Press **Left Arrow (←)** to go to the Previous image
+- Press **Right Arrow (→)** to go to the Next image
+
+**Categorization:**
 - Press **C** to categorize as Clear
 - Press **L** to categorize as Cloudy (L for cLoudy)
 - Press **S** to categorize as Skip
+- Press **U** to move back to Unsorted (when reviewing sorted images)
 
 ### Counters
 The header shows real-time counts of:
@@ -62,3 +82,5 @@ The header shows real-time counts of:
 - The app automatically loads the next image after each categorization
 - Existing images in the target folders are counted in the totals
 - You can run this in batches - existing categorized images won't be affected
+- **Auto-refresh**: The app polls for new images every 5 seconds and automatically updates counts. If you're viewing an empty folder and new images are added, it will automatically load them
+- **Navigation history**: Use Previous/Next to navigate through images you've viewed. History is maintained across folder switches

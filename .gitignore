@@ -1,0 +1,40 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Debug/Release builds
+debug/
+target/
+
+# Note: Cargo.lock is committed for executables/binaries but should be in .gitignore for libraries
+# This is an executable, so Cargo.lock will be tracked
+# More information: https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*~
+._*
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.vim/
+*.iml
+.project
+.classpath
+.settings/
+.metadata/
+
+# User-specific samples directory (don't commit user's images)
+samples/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+*.tmp

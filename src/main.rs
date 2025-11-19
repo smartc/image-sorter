@@ -18,6 +18,7 @@ struct AppState {
 #[derive(Serialize)]
 struct ImageInfo {
     filename: String,
+    current_folder: String,
     unsorted_count: usize,
     clear_count: usize,
     cloudy_count: usize,
@@ -27,7 +28,13 @@ struct ImageInfo {
 #[derive(Deserialize)]
 struct MoveImageRequest {
     filename: String,
-    category: String,
+    source_folder: String,
+    target_folder: String,
+}
+
+#[derive(Deserialize)]
+struct FolderQuery {
+    folder: Option<String>,
 }
 
 #[tokio::main]
@@ -59,7 +66,12 @@ async fn index_handler() -> Html<&'static str> {
     Html(include_str!("../index.html"))
 }
 
-async fn get_current_image(State(state): State<Arc<AppState>>) -> Result<Json<ImageInfo>, StatusCode> {
+async fn get_current_image(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<FolderQuery>,
+) -> Result<Json<ImageInfo>, StatusCode> {
+    let current_folder = query.folder.unwrap_or_else(|| "Unsorted".to_string());
+
     let unsorted_path = format!("{}/Unsorted", state.base_path);
     let clear_path = format!("{}/Clear", state.base_path);
     let cloudy_path = format!("{}/Cloudy", state.base_path);
@@ -71,8 +83,9 @@ async fn get_current_image(State(state): State<Arc<AppState>>) -> Result<Json<Im
     let cloudy_count = count_images(&cloudy_path).await;
     let skip_count = count_images(&skip_path).await;
 
-    // Get first unsorted image
-    let mut entries = match fs::read_dir(&unsorted_path).await {
+    // Get first image from the current folder
+    let current_path = format!("{}/{}", state.base_path, current_folder);
+    let mut entries = match fs::read_dir(&current_path).await {
         Ok(entries) => entries,
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     };
@@ -93,6 +106,7 @@ async fn get_current_image(State(state): State<Arc<AppState>>) -> Result<Json<Im
 
     Ok(Json(ImageInfo {
         filename,
+        current_folder,
         unsorted_count,
         clear_count,
         cloudy_count,
@@ -104,8 +118,8 @@ async fn move_image(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveImageRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let source = format!("{}/Unsorted/{}", state.base_path, payload.filename);
-    let destination = format!("{}/{}/{}", state.base_path, payload.category, payload.filename);
+    let source = format!("{}/{}/{}", state.base_path, payload.source_folder, payload.filename);
+    let destination = format!("{}/{}/{}", state.base_path, payload.target_folder, payload.filename);
 
     match fs::rename(&source, &destination).await {
         Ok(_) => Ok(StatusCode::OK),
@@ -119,9 +133,11 @@ async fn move_image(
 async fn serve_image(
     State(state): State<Arc<AppState>>,
     Path(filename): Path<String>,
+    Query(query): Query<FolderQuery>,
 ) -> Result<Response, StatusCode> {
-    let path = format!("{}/Unsorted/{}", state.base_path, filename);
-    
+    let folder = query.folder.unwrap_or_else(|| "Unsorted".to_string());
+    let path = format!("{}/{}/{}", state.base_path, folder, filename);
+
     let content = match fs::read(&path).await {
         Ok(content) => content,
         Err(_) => return Err(StatusCode::NOT_FOUND),

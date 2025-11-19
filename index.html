@@ -147,6 +147,11 @@
             color: #000;
         }
 
+        .btn-unsorted {
+            background: #ffa500;
+            color: #000;
+        }
+
         .no-images {
             text-align: center;
             padding: 40px;
@@ -174,7 +179,16 @@
 </head>
 <body>
     <div class="header">
-        <h1>Image Sorter</h1>
+        <h1>Sky Image Sorter</h1>
+        <div style="margin-bottom: 15px;">
+            <label for="folder-select" style="margin-right: 10px; font-size: 14px;">Review folder:</label>
+            <select id="folder-select" style="padding: 8px 12px; font-size: 14px; border-radius: 4px; background: #333; color: #e0e0e0; border: 1px solid #555; cursor: pointer;">
+                <option value="Unsorted">Unsorted</option>
+                <option value="Clear">Clear</option>
+                <option value="Cloudy">Cloudy</option>
+                <option value="Skip">Skip</option>
+            </select>
+        </div>
         <div class="stats">
             <div class="stat unsorted">
                 <div class="stat-label">Unsorted</div>
@@ -201,12 +215,16 @@
 
     <script>
         let currentImage = null;
+        let currentFolder = 'Unsorted';
 
         async function loadCurrentImage() {
             try {
-                const response = await fetch('/api/current');
+                const folderSelect = document.getElementById('folder-select');
+                currentFolder = folderSelect.value;
+
+                const response = await fetch(`/api/current?folder=${currentFolder}`);
                 const data = await response.json();
-                
+
                 // Update stats
                 document.getElementById('unsorted-count').textContent = data.unsorted_count;
                 document.getElementById('clear-count').textContent = data.clear_count;
@@ -214,12 +232,12 @@
                 document.getElementById('skip-count').textContent = data.skip_count;
 
                 const mainContent = document.getElementById('main-content');
-                
+
                 if (!data.filename) {
                     mainContent.innerHTML = `
                         <div class="no-images">
                             <h2>✓ All Done!</h2>
-                            <p>No more images to sort</p>
+                            <p>No more images in ${currentFolder} folder</p>
                         </div>
                     `;
                     return;
@@ -227,24 +245,48 @@
 
                 currentImage = data.filename;
 
-                mainContent.innerHTML = `
-                    <div class="image-container">
-                        <img src="/image/${data.filename}" alt="${data.filename}">
-                    </div>
-                    <div class="filename">${data.filename}</div>
-                    <div class="controls">
-                        <button class="btn-clear" onclick="categorize('Clear')">
+                // Build button HTML based on current folder
+                let buttonsHTML = '';
+                if (currentFolder !== 'Unsorted') {
+                    buttonsHTML += `
+                        <button class="btn-unsorted" onclick="moveToFolder('Unsorted')">
+                            <span>Unsorted</span>
+                            <span class="key">U</span>
+                        </button>
+                    `;
+                }
+                if (currentFolder !== 'Clear') {
+                    buttonsHTML += `
+                        <button class="btn-clear" onclick="moveToFolder('Clear')">
                             <span>Clear</span>
                             <span class="key">C</span>
                         </button>
-                        <button class="btn-cloudy" onclick="categorize('Cloudy')">
+                    `;
+                }
+                if (currentFolder !== 'Cloudy') {
+                    buttonsHTML += `
+                        <button class="btn-cloudy" onclick="moveToFolder('Cloudy')">
                             <span>Cloudy</span>
                             <span class="key">L</span>
                         </button>
-                        <button class="btn-skip" onclick="categorize('Skip')">
+                    `;
+                }
+                if (currentFolder !== 'Skip') {
+                    buttonsHTML += `
+                        <button class="btn-skip" onclick="moveToFolder('Skip')">
                             <span>Skip</span>
                             <span class="key">S</span>
                         </button>
+                    `;
+                }
+
+                mainContent.innerHTML = `
+                    <div class="image-container">
+                        <img src="/image/${data.filename}?folder=${currentFolder}" alt="${data.filename}">
+                    </div>
+                    <div class="filename">${data.filename}</div>
+                    <div class="controls">
+                        ${buttonsHTML}
                     </div>
                 `;
             } catch (error) {
@@ -256,7 +298,7 @@
             }
         }
 
-        async function categorize(category) {
+        async function moveToFolder(targetFolder) {
             if (!currentImage) return;
 
             try {
@@ -267,7 +309,8 @@
                     },
                     body: JSON.stringify({
                         filename: currentImage,
-                        category: category,
+                        source_folder: currentFolder,
+                        target_folder: targetFolder,
                     }),
                 });
 
@@ -284,15 +327,22 @@
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (!currentImage) return;
-            
+
             const key = e.key.toLowerCase();
-            if (key === 'c') {
-                categorize('Clear');
-            } else if (key === 'l') {
-                categorize('Cloudy');
-            } else if (key === 's') {
-                categorize('Skip');
+            if (key === 'c' && currentFolder !== 'Clear') {
+                moveToFolder('Clear');
+            } else if (key === 'l' && currentFolder !== 'Cloudy') {
+                moveToFolder('Cloudy');
+            } else if (key === 's' && currentFolder !== 'Skip') {
+                moveToFolder('Skip');
+            } else if (key === 'u' && currentFolder !== 'Unsorted') {
+                moveToFolder('Unsorted');
             }
+        });
+
+        // Handle folder selection change
+        document.getElementById('folder-select').addEventListener('change', () => {
+            loadCurrentImage();
         });
 
         // Load first image on page load

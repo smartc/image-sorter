@@ -1,0 +1,16 @@
+[Unit]
+Description=Sky Image Sorter Web Application
+After=network.target
+
+[Service]
+Type=simple
+# UPDATE THESE VALUES for your system:
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/image-sorter
+ExecStart=/path/to/image-sorter/target/release/image-sorter
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

@@ -33,6 +33,62 @@
             color: #fff;
         }
 
+        .header-controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tod-toggle {
+            display: flex;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+
+        .tod-toggle button {
+            padding: 8px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-direction: row;
+            gap: 6px;
+        }
+
+        .tod-toggle button:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .tod-toggle button:active {
+            transform: none;
+        }
+
+        .tod-toggle .tod-day {
+            background: #444;
+            color: #999;
+        }
+
+        .tod-toggle .tod-day.active {
+            background: #f59e0b;
+            color: #000;
+        }
+
+        .tod-toggle .tod-night {
+            background: #444;
+            color: #999;
+        }
+
+        .tod-toggle .tod-night.active {
+            background: #6366f1;
+            color: #fff;
+        }
+
         .stats {
             display: flex;
             gap: 20px;
@@ -197,14 +253,20 @@
 <body>
     <div class="header">
         <h1>Sky Image Sorter</h1>
-        <div style="margin-bottom: 15px;">
-            <label for="folder-select" style="margin-right: 10px; font-size: 14px;">Review folder:</label>
-            <select id="folder-select" style="padding: 8px 12px; font-size: 14px; border-radius: 4px; background: #333; color: #e0e0e0; border: 1px solid #555; cursor: pointer;">
-                <option value="Unsorted">Unsorted</option>
-                <option value="Clear">Clear</option>
-                <option value="Cloudy">Cloudy</option>
-                <option value="Skip">Skip</option>
-            </select>
+        <div class="header-controls">
+            <div class="tod-toggle">
+                <button class="tod-day active" onclick="setTimeOfDay('day')">Day</button>
+                <button class="tod-night" onclick="setTimeOfDay('night')">Night</button>
+            </div>
+            <div>
+                <label for="folder-select" style="margin-right: 10px; font-size: 14px;">Review folder:</label>
+                <select id="folder-select" style="padding: 8px 12px; font-size: 14px; border-radius: 4px; background: #333; color: #e0e0e0; border: 1px solid #555; cursor: pointer;">
+                    <option value="Unsorted">Unsorted</option>
+                    <option value="Clear">Clear</option>
+                    <option value="Cloudy">Cloudy</option>
+                    <option value="Skip">Skip</option>
+                </select>
+            </div>
         </div>
         <div class="stats">
             <div class="stat unsorted">
@@ -233,21 +295,41 @@
     <script>
         let currentImage = null;
         let currentFolder = 'Unsorted';
-        let reviewedImages = {}; // Track reviewed images per folder
+        let currentTimeOfDay = 'day';
+        let reviewedImages = {}; // Track reviewed images per folder per time_of_day
         let imageHistory = []; // Track navigation history
         let historyIndex = -1; // Current position in history
         let lastCounts = { unsorted: 0, clear: 0, cloudy: 0, skip: 0 }; // Track counts for auto-refresh
+
+        function reviewedKey() {
+            return `${currentTimeOfDay}/${currentFolder}`;
+        }
+
+        function setTimeOfDay(tod) {
+            if (tod === currentTimeOfDay) return;
+            currentTimeOfDay = tod;
+
+            // Update toggle buttons
+            document.querySelector('.tod-day').classList.toggle('active', tod === 'day');
+            document.querySelector('.tod-night').classList.toggle('active', tod === 'night');
+
+            // Reset state for new time of day
+            imageHistory = [];
+            historyIndex = -1;
+            loadCurrentImage();
+        }
 
         async function loadCurrentImage(fromHistory = false) {
             try {
                 const folderSelect = document.getElementById('folder-select');
                 currentFolder = folderSelect.value;
 
-                // Get list of reviewed images for current folder
-                const excludeList = reviewedImages[currentFolder] || [];
+                // Get list of reviewed images for current folder + time_of_day
+                const key = reviewedKey();
+                const excludeList = reviewedImages[key] || [];
                 const excludeParam = excludeList.length > 0 ? `&exclude=${excludeList.join(',').replace(/,/g, '%2C')}` : '';
 
-                const response = await fetch(`/api/current?folder=${currentFolder}${excludeParam}`);
+                const response = await fetch(`/api/current?folder=${currentFolder}&time_of_day=${currentTimeOfDay}${excludeParam}`);
                 const data = await response.json();
 
                 // Update stats and check for new files
@@ -258,8 +340,8 @@
                 if (!data.filename) {
                     mainContent.innerHTML = `
                         <div class="no-images">
-                            <h2>✓ All Done!</h2>
-                            <p>No more images in ${currentFolder} folder</p>
+                            <h2>All Done!</h2>
+                            <p>No more images in ${currentTimeOfDay} / ${currentFolder} folder</p>
                         </div>
                     `;
                     return;
@@ -273,7 +355,7 @@
                     if (historyIndex < imageHistory.length - 1) {
                         imageHistory = imageHistory.slice(0, historyIndex + 1);
                     }
-                    imageHistory.push({ filename: currentImage, folder: currentFolder });
+                    imageHistory.push({ filename: currentImage, folder: currentFolder, timeOfDay: currentTimeOfDay });
                     historyIndex = imageHistory.length - 1;
                 }
 
@@ -316,18 +398,18 @@
 
                 mainContent.innerHTML = `
                     <div class="image-container">
-                        <img src="/image/${data.filename}?folder=${currentFolder}" alt="${data.filename}">
+                        <img src="/image/${data.filename}?folder=${currentFolder}&time_of_day=${currentTimeOfDay}" alt="${data.filename}">
                     </div>
                     <div class="filename">${data.filename}</div>
                     <div class="controls">
                         <button class="btn-previous" onclick="previousImage()" ${!canGoPrevious ? 'disabled' : ''}>
                             <span>Previous</span>
-                            <span class="key">←</span>
+                            <span class="key">&larr;</span>
                         </button>
                         ${buttonsHTML}
                         <button class="btn-next" onclick="skipImage()">
                             <span>Next</span>
-                            <span class="key">→</span>
+                            <span class="key">&rarr;</span>
                         </button>
                     </div>
                 `;
@@ -379,13 +461,15 @@
                         filename: currentImage,
                         source_folder: currentFolder,
                         target_folder: targetFolder,
+                        time_of_day: currentTimeOfDay,
                     }),
                 });
 
                 if (response.ok) {
                     // Clear reviewed list for current folder since we moved an image
-                    if (reviewedImages[currentFolder]) {
-                        reviewedImages[currentFolder] = reviewedImages[currentFolder].filter(img => img !== currentImage);
+                    const key = reviewedKey();
+                    if (reviewedImages[key]) {
+                        reviewedImages[key] = reviewedImages[key].filter(img => img !== currentImage);
                     }
                     loadCurrentImage();
                 } else {
@@ -400,10 +484,11 @@
             if (!currentImage) return;
 
             // Add current image to reviewed list
-            if (!reviewedImages[currentFolder]) {
-                reviewedImages[currentFolder] = [];
+            const key = reviewedKey();
+            if (!reviewedImages[key]) {
+                reviewedImages[key] = [];
             }
-            reviewedImages[currentFolder].push(currentImage);
+            reviewedImages[key].push(currentImage);
 
             // Load next image
             loadCurrentImage();
@@ -415,6 +500,11 @@
             historyIndex--;
             const previousEntry = imageHistory[historyIndex];
 
+            // Switch time of day if needed
+            if (previousEntry.timeOfDay !== currentTimeOfDay) {
+                setTimeOfDay(previousEntry.timeOfDay);
+            }
+
             // Switch folder if needed
             if (previousEntry.folder !== currentFolder) {
                 document.getElementById('folder-select').value = previousEntry.folder;
@@ -422,8 +512,9 @@
             }
 
             // Remove from reviewed list if it was there
-            if (reviewedImages[currentFolder]) {
-                reviewedImages[currentFolder] = reviewedImages[currentFolder].filter(
+            const key = `${currentTimeOfDay}/${currentFolder}`;
+            if (reviewedImages[key]) {
+                reviewedImages[key] = reviewedImages[key].filter(
                     img => img !== previousEntry.filename
                 );
             }
@@ -435,7 +526,7 @@
 
         async function displayCurrentImage() {
             try {
-                const response = await fetch(`/api/current?folder=${currentFolder}`);
+                const response = await fetch(`/api/current?folder=${currentFolder}&time_of_day=${currentTimeOfDay}`);
                 const data = await response.json();
                 updateStats(data);
 
@@ -480,18 +571,18 @@
 
                 mainContent.innerHTML = `
                     <div class="image-container">
-                        <img src="/image/${currentImage}?folder=${currentFolder}" alt="${currentImage}">
+                        <img src="/image/${currentImage}?folder=${currentFolder}&time_of_day=${currentTimeOfDay}" alt="${currentImage}">
                     </div>
                     <div class="filename">${currentImage}</div>
                     <div class="controls">
                         <button class="btn-previous" onclick="previousImage()" ${!canGoPrevious ? 'disabled' : ''}>
                             <span>Previous</span>
-                            <span class="key">←</span>
+                            <span class="key">&larr;</span>
                         </button>
                         ${buttonsHTML}
                         <button class="btn-next" onclick="skipImage()">
                             <span>Next</span>
-                            <span class="key">→</span>
+                            <span class="key">&rarr;</span>
                         </button>
                     </div>
                 `;
@@ -524,19 +615,26 @@
             } else if (key === 'u' && currentFolder !== 'Unsorted') {
                 moveToFolder('Unsorted');
             }
+            // Day/Night toggle with D and N keys
+            else if (key === 'd') {
+                setTimeOfDay('day');
+            } else if (key === 'n') {
+                setTimeOfDay('night');
+            }
         });
 
         // Handle folder selection change
         document.getElementById('folder-select').addEventListener('change', () => {
             // Clear reviewed images when switching folders
-            reviewedImages[currentFolder] = [];
+            const key = reviewedKey();
+            reviewedImages[key] = [];
             loadCurrentImage();
         });
 
         // Auto-refresh: Poll for new files every 5 seconds
         setInterval(async () => {
             try {
-                const response = await fetch(`/api/current?folder=${currentFolder}`);
+                const response = await fetch(`/api/current?folder=${currentFolder}&time_of_day=${currentTimeOfDay}`);
                 const data = await response.json();
                 updateStats(data);
             } catch (error) {

@@ -19,6 +19,7 @@ struct AppState {
 struct ImageInfo {
     filename: String,
     current_folder: String,
+    time_of_day: String,
     unsorted_count: usize,
     clear_count: usize,
     cloudy_count: usize,
@@ -30,12 +31,14 @@ struct MoveImageRequest {
     filename: String,
     source_folder: String,
     target_folder: String,
+    time_of_day: String,
 }
 
 #[derive(Deserialize)]
 struct FolderQuery {
     folder: Option<String>,
     exclude: Option<String>,
+    time_of_day: Option<String>,
 }
 
 #[tokio::main]
@@ -57,9 +60,9 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .unwrap();
-    
+
     println!("Server running on http://127.0.0.1:3000");
-    
+
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -72,16 +75,18 @@ async fn get_current_image(
     Query(query): Query<FolderQuery>,
 ) -> Result<Json<ImageInfo>, StatusCode> {
     let current_folder = query.folder.unwrap_or_else(|| "Unsorted".to_string());
+    let time_of_day = query.time_of_day.unwrap_or_else(|| "day".to_string());
 
     // Parse excluded filenames
     let excluded: Vec<String> = query.exclude
         .map(|e| e.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_default();
 
-    let unsorted_path = format!("{}/Unsorted", state.base_path);
-    let clear_path = format!("{}/Clear", state.base_path);
-    let cloudy_path = format!("{}/Cloudy", state.base_path);
-    let skip_path = format!("{}/Skip", state.base_path);
+    let tod_base = format!("{}/{}", state.base_path, time_of_day);
+    let unsorted_path = format!("{}/Unsorted", tod_base);
+    let clear_path = format!("{}/Clear", tod_base);
+    let cloudy_path = format!("{}/Cloudy", tod_base);
+    let skip_path = format!("{}/Skip", tod_base);
 
     // Get counts for all directories
     let unsorted_count = count_images(&unsorted_path).await;
@@ -90,7 +95,7 @@ async fn get_current_image(
     let skip_count = count_images(&skip_path).await;
 
     // Get first image from the current folder that's not excluded
-    let current_path = format!("{}/{}", state.base_path, current_folder);
+    let current_path = format!("{}/{}", tod_base, current_folder);
     let mut entries = match fs::read_dir(&current_path).await {
         Ok(entries) => entries,
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -113,6 +118,7 @@ async fn get_current_image(
     Ok(Json(ImageInfo {
         filename,
         current_folder,
+        time_of_day,
         unsorted_count,
         clear_count,
         cloudy_count,
@@ -124,8 +130,9 @@ async fn move_image(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MoveImageRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let source = format!("{}/{}/{}", state.base_path, payload.source_folder, payload.filename);
-    let destination = format!("{}/{}/{}", state.base_path, payload.target_folder, payload.filename);
+    let tod_base = format!("{}/{}", state.base_path, payload.time_of_day);
+    let source = format!("{}/{}/{}", tod_base, payload.source_folder, payload.filename);
+    let destination = format!("{}/{}/{}", tod_base, payload.target_folder, payload.filename);
 
     match fs::rename(&source, &destination).await {
         Ok(_) => Ok(StatusCode::OK),
@@ -142,7 +149,8 @@ async fn serve_image(
     Query(query): Query<FolderQuery>,
 ) -> Result<Response, StatusCode> {
     let folder = query.folder.unwrap_or_else(|| "Unsorted".to_string());
-    let path = format!("{}/{}/{}", state.base_path, folder, filename);
+    let time_of_day = query.time_of_day.unwrap_or_else(|| "day".to_string());
+    let path = format!("{}/{}/{}/{}", state.base_path, time_of_day, folder, filename);
 
     let content = match fs::read(&path).await {
         Ok(content) => content,
